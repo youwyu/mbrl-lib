@@ -8,6 +8,7 @@ from .trajectory_opt import (
     CEMOptimizer,
     ICEMOptimizer,
     MPPIOptimizer,
+    MPPIMultiOptimizer,
     TrajectoryOptimizer,
     TrajectoryOptimizerAgent,
     create_trajectory_optim_agent_for_model,
