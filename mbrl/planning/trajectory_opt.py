@@ -336,8 +336,8 @@ class MPPIMultiOptimizer(Optimizer):
         gamma: float,
         sigma: float,
         beta: float,
-        lower_bound: Sequence[Sequence[float]],
-        upper_bound: Sequence[Sequence[float]],
+        lower_bound: Sequence[float],
+        upper_bound: Sequence[float],
         device: torch.device,
     ):
         super().__init__()
@@ -416,6 +416,7 @@ class MPPIMultiOptimizer(Optimizer):
             population = torch.where(
                 population < self.lower_bound, self.lower_bound, population
             )
+
             values = obj_fun(population)
             values[values.isnan()] = -1e-10
 
@@ -424,19 +425,15 @@ class MPPIMultiOptimizer(Optimizer):
 
             # weight actions
             weights = torch.reshape(
-                torch.exp(self.gamma * (values - values.max())),
+                torch.exp(self.gamma * (values - values.max(dim=0, keepdim=True)[0])),
                 (self.population_size, 1, -1),
             )
-            num = weights.size(2)
-            weights = weights.repeat(1, 1, 3)
-            weight = weights.clone()
-            weight[torch.arange(0, num, 1)] = weights[torch.arange(0, 3*num, 3)]
-            weight[torch.arange(num, num*2, 1)] = weights[torch.arange(1, 3*num, 3)]
-            weight[torch.arange(num*2, num*3, 1)] = weights[torch.arange(2, 3*num, 3)]
-            norm = torch.sum(weight, dim=0) + 1e-10
             
-            weighted_actions = population * weights
-            self.mean = torch.sum(weighted_actions, dim=0) / norm
+            act_dof = population.size(-1) // weights.size(-1)
+            norm = torch.sum(weights, dim=0) + 1e-10
+
+            weighted_actions = population * weights.repeat(1, 1, act_dof)
+            self.mean = torch.sum(weighted_actions, dim=0) / norm.repeat(1, act_dof)
 
         return self.mean.clone()
     
@@ -695,7 +692,7 @@ class TrajectoryOptimizer:
             # Note that initial_solution[i] is the same for all values of [i],
             # so just pick i = 0
             self.previous_solution[-self.replan_freq :] = self.initial_solution[0]
-        return best_solution.cpu().numpy()
+        return best_solution#.cpu().numpy()
 
     def reset(self):
         """Resets the previous solution cache to the initial solution."""
