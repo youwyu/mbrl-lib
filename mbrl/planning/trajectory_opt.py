@@ -424,16 +424,14 @@ class MPPIMultiOptimizer(Optimizer):
                 callback(population, values, k)
 
             # weight actions
-            weights = torch.reshape(
-                torch.exp(self.gamma * (values - values.max(dim=0, keepdim=True)[0])),
-                (self.population_size, 1, -1),
-            )
+            weights = torch.exp(self.gamma * (values - values.max(dim=0, keepdim=True)[0]))
+            weights = weights.unsqueeze(1)
             
             act_dof = population.size(-1) // weights.size(-1)
             norm = torch.sum(weights, dim=0) + 1e-10
 
-            weighted_actions = population * weights.repeat(1, 1, act_dof)
-            self.mean = torch.sum(weighted_actions, dim=0) / norm.repeat(1, act_dof)
+            weighted_actions = population * weights.repeat_interleave(act_dof, dim=-1)
+            self.mean = torch.sum(weighted_actions, dim=0) / norm.repeat_interleave(act_dof, dim=-1)
 
         return self.mean.clone()
     
