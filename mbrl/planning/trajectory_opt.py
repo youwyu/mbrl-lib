@@ -352,7 +352,7 @@ class MPPIMultiOptimizer(Optimizer):
 
         self.lower_bound = torch.tensor(lower_bound, device=device, dtype=torch.float32)
         self.upper_bound = torch.tensor(upper_bound, device=device, dtype=torch.float32)
-        self.var = sigma**2 * torch.ones_like(self.lower_bound)
+        self.stdev = torch.abs(sigma * torch.ones_like(self.lower_bound))
         self.beta = beta
         self.gamma = gamma
         self.refinements = num_iterations
@@ -394,9 +394,9 @@ class MPPIMultiOptimizer(Optimizer):
 
             lb_dist = self.mean - self.lower_bound
             ub_dist = self.upper_bound - self.mean
-            mv = torch.minimum(torch.square(lb_dist / 2), torch.square(ub_dist / 2))
-            constrained_var = torch.minimum(mv, self.var)
-            population = noise.clone() * torch.sqrt(constrained_var)
+            mv = torch.minimum(lb_dist / 2, ub_dist / 2)
+            constrained_stdev = torch.minimum(mv, self.stdev)
+            population = noise.clone() * constrained_stdev
 
             # smoothed actions with noise
             population[:, 0, :] = (
@@ -410,12 +410,7 @@ class MPPIMultiOptimizer(Optimizer):
                 )
             # clipping actions
             # This should still work if the bounds between dimensions are different.
-            population = torch.where(
-                population > self.upper_bound, self.upper_bound, population
-            )
-            population = torch.where(
-                population < self.lower_bound, self.lower_bound, population
-            )
+            population.clamp_(min=self.lower_bound, max=self.upper_bound)
 
             values = obj_fun(population)
             values[values.isnan()] = -1e-10
